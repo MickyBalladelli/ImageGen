@@ -37,15 +37,16 @@ export function ImageViewer() {
     <div class="image-stage" aria-busy=${computed(() => String(isLoadingSignal.get()))}>
       ${computed(() => {
         if (isLoadingSignal.get()) return html`<div class="placeholder" role="status">${SpinnerComponent({ ariaLabel: 'Generating image' })}<h3>From idea to image</h3><p>Refining your prompt, then rendering.<br />This may take a few minutes on local hardware.</p></div>`;
-        const url = imageUrlSignal.get();
+        const url = previewUrl.get();
         if (url) return html`<img src=${url} alt="Generated image" @load=${() => imageReady.set(true)} @error=${() => { imageReady.set(false); errorSignal.set('The image could not be displayed. Try generating it again.'); }} />`;
         return html`<div class="placeholder"><svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true"><rect x="6" y="6" width="44" height="44" rx="7" stroke="currentColor" stroke-width="1.5"/><circle cx="20" cy="20" r="4" stroke="currentColor" stroke-width="1.5"/><path d="m9 42 13-13 9 9 6-7 10 11" stroke="currentColor" stroke-width="1.5"/></svg><h3>A space for your next idea</h3><p>Describe a scene and generate your first image.</p></div>`;
       })}
     </div>
     ${computed(() => {
-      const url = imageUrlSignal.get();
+      const url = previewUrl.get();
       if (!url || !imageReady.get()) return null;
-      const extension = url.startsWith('data:image/jpeg') ? 'jpg' : url.startsWith('data:image/webp') ? 'webp' : 'png';
+      const dataUrl = imageUrlSignal.get();
+      const extension = dataUrl.startsWith('data:image/jpeg') ? 'jpg' : dataUrl.startsWith('data:image/webp') ? 'webp' : 'png';
       return html`<div class="download-row"><span class="muted">Generated with Stable Diffusion</span><a class="download-link" href=${url} download=${`imagegen.${extension}`}>Download image</a></div>`;
     })}
     ${computed(() => enhancedPromptSignal.get() ? html`<section class="enhanced-prompt" aria-label="Enhanced prompt"><div class="section-heading"><h3>Refined prompt</h3>${PrismButton({ label: 'Copy prompt', variant: 'secondary', size: 'small', onClick: () => { void copyPrompt(); } })}</div><p class="prompt-text">${enhancedPromptSignal}</p><p class="copy-status muted" role="status">${copyStatus}</p></section>` : null)}

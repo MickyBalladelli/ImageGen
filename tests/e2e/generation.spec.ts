@@ -52,6 +52,45 @@ test('cancel aborts an in-flight request and permits another generation', async 
   await expect(page.getByRole('link', { name: 'Download image' })).toBeVisible();
 });
 
+test('regeneration replaces the image and releases its old Blob URL', async ({ page }) => {
+  await page.getByLabel('Describe your image').fill('First image');
+  await page.getByRole('button', { name: 'Generate image', exact: true }).click();
+  const download = page.getByRole('link', { name: 'Download image' });
+  await expect(download).toBeVisible();
+  const oldUrl = await download.getAttribute('href');
+  expect(oldUrl).toMatch(/^blob:/);
+  await page.getByLabel('Describe your image').fill('Second image');
+  await page.getByRole('button', { name: 'Generate image', exact: true }).click();
+  await expect(download).toBeVisible();
+  expect(await download.getAttribute('href')).not.toBe(oldUrl);
+  expect(await page.evaluate(async url => {
+    try { await fetch(url!); return false; } catch { return true; }
+  }, oldUrl)).toBe(true);
+});
+
+test('refined prompt markup is displayed as text and clipboard denial is explained', async ({ page }) => {
+  await page.getByLabel('Describe your image').fill('<em>an astronaut cat</em>');
+  await page.getByRole('button', { name: 'Generate image', exact: true }).click();
+  const prompt = page.getByLabel('Enhanced prompt');
+  await expect(prompt).toContainText('<em>an astronaut cat</em>');
+  await expect(prompt.locator('em')).toHaveCount(0);
+  await page.evaluate(() => Object.defineProperty(navigator.clipboard, 'writeText', {
+    value: async () => { throw new Error('Permission denied'); },
+  }));
+  await page.getByRole('button', { name: 'Copy prompt' }).click();
+  await expect(page.getByText('Copy is unavailable.', { exact: false })).toBeVisible();
+});
+
+test('invalid API results do not leave the UI loading', async ({ page }) => {
+  await page.route('**/api/generate', route => route.fulfill({
+    json: { enhancedPrompt: 'cat', imageUrl: 'https://example.com/unexpected-image', error: null },
+  }));
+  await page.getByLabel('Describe your image').fill('cat');
+  await page.getByRole('button', { name: 'Generate image', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('incomplete or invalid');
+  await expect(page.getByRole('button', { name: 'Generate image', exact: true })).toBeEnabled();
+});
+
 test('mobile layout stays within the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.getByLabel('Describe your image')).toBeVisible();
