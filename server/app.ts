@@ -53,6 +53,30 @@ export function createApp(config: Config, services: GenerationServices, clientDi
     }
     active += 1;
     const controller = new AbortController();
+    const disconnected = () => { if (!res.writableEnded) controller.abort(); };
+    res.on('close', disconnected);
+    const wantsProgress = req.headers.accept?.includes('text/event-stream') ?? false;
+    if (!wantsProgress) {
+      try {
+        const enhancedPrompt = await services.enhance(prompt.trim(), controller.signal);
+        controller.signal.throwIfAborted();
+        const generated = await services.generate(enhancedPrompt, controller.signal, settings);
+        const imageUrl = typeof generated === 'string' ? generated : generated.imageUrl;
+        if (!controller.signal.aborted) res.json({
+          enhancedPrompt, imageUrl, error: null,
+          ...(req.body?.settings || typeof generated !== 'string' ? {
+            settings, provider: config.imageProvider, promptRefined: config.promptRefinement === 'ollama',
+          } : {}),
+          ...(typeof generated !== 'string' ? { savedFile: generated.savedFile, filename: generated.filename } : {}),
+        });
+      } catch (error) {
+        if (!controller.signal.aborted) next(error);
+      } finally {
+        active -= 1;
+        res.off('close', disconnected);
+      }
+      return;
+    }
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-store');
     res.setHeader('Connection', 'keep-alive');
@@ -60,8 +84,6 @@ export function createApp(config: Config, services: GenerationServices, clientDi
     const sendEvent = (event: string, data: unknown) => {
       if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
-    const disconnected = () => { if (!res.writableEnded) controller.abort(); };
-    res.on('close', disconnected);
     try {
       if (config.promptRefinement === 'ollama') sendEvent('progress', { phase: 'refining' });
       const enhancedPrompt = await services.enhance(prompt.trim(), controller.signal);

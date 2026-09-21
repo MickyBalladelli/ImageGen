@@ -49,7 +49,7 @@ export async function generateImage(
   onProgress: (progress: GenerationProgress) => void = () => {},
 ): Promise<GenerationResult> {
   const response = await fetch('/api/generate', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
     body: JSON.stringify({ userPrompt, settings }), signal,
   });
   if (!response.ok) {
@@ -58,6 +58,12 @@ export async function generateImage(
     catch { throw new Error('The server returned an unreadable response. Check that the API is running.'); }
     const body = data as Partial<GenerationResult> | null;
     throw new Error(typeof body?.error === 'string' ? body.error : `Generation failed (HTTP ${response.status}).`);
+  }
+  if (!response.headers.get('content-type')?.includes('text/event-stream')) {
+    let data: unknown;
+    try { data = await response.json(); }
+    catch { throw new Error('The server returned an unreadable response. Check that the API is running.'); }
+    return parseGenerationResult(data);
   }
   const reader = response.body?.getReader();
   if (!reader) throw new Error('The server returned an empty generation stream.');

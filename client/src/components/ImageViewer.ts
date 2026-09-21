@@ -36,14 +36,17 @@ export function ImageViewer() {
   const remaining = computed(() => {
     const progress = generationProgressSignal.get();
     const samples = progressSamplesSignal.get().slice(-8);
-    if (progress?.phase !== 'rendering' || !Number.isInteger(progress.step) || !Number.isInteger(progress.totalSteps)
-        || progress.step >= progress.totalSteps || samples.length < 2) return null;
+    const step = progress?.step;
+    const totalSteps = progress?.totalSteps;
+    if (progress?.phase !== 'rendering' || typeof step !== 'number' || typeof totalSteps !== 'number'
+        || !Number.isInteger(step) || !Number.isInteger(totalSteps)
+        || step >= totalSteps || samples.length < 2) return null;
     const first = samples[0];
     const last = samples[samples.length - 1];
     const stepCount = last.step - first.step;
     if (stepCount < 1) return null;
     const secondsPerStep = (last.at - first.at) / 1000 / stepCount;
-    return Math.max(1, Math.round((progress.totalSteps - progress.step) * secondsPerStep));
+    return Math.max(1, Math.round((totalSteps - step) * secondsPerStep));
   });
   const progressLabel = computed(() => {
     const progress = generationProgressSignal.get();

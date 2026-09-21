@@ -23,6 +23,7 @@ export async function mfluxInstalled(config: Config): Promise<boolean> {
 }
 
 function parseProgress(line: string, fallbackTotal: number) {
+  if (!line.includes('|') && !/\bstep/i.test(line)) return null
   const match = line.match(/(?:^|\s)(\d+)\s*\/\s*(\d+)(?:\s|$)/)
   if (!match) return null
   const step = Number(match[1])
