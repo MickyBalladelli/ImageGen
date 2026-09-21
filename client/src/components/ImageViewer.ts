@@ -1,7 +1,7 @@
 import { component, computed, effect, html, signal } from '@mickyballadelli/matrix';
 import { ButtonComponent as Button, SpinnerComponent, CopyIcon, DownloadIcon, ImageIcon } from '@mickyballadelli/prism';
 import { Logo } from './Logo';
-import { enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal, resultSignal, elapsedSignal, generationProgressSignal, progressSamplesSignal, providerNameSignal, widthSignal, heightSignal, stepsSignal, quantizeSignal } from '../state';
+import { enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal, resultSignal, elapsedSignal, generationProgressSignal, progressSamplesSignal, generationDurationSignal, providerNameSignal, widthSignal, heightSignal, stepsSignal, quantizeSignal } from '../state';
 
 function formatDuration(seconds: number) {
   const minutes = Math.floor(seconds / 60);
@@ -33,6 +33,10 @@ export function ImageViewer() {
     return settings ? `${settings.width} × ${settings.height}` : `${widthSignal.get()} × ${heightSignal.get()}`;
   });
   const elapsed = computed(() => `${Math.floor(elapsedSignal.get() / 60)}:${String(elapsedSignal.get() % 60).padStart(2, '0')}`);
+  const generatedTime = computed(() => {
+    const seconds = generationDurationSignal.get();
+    return seconds === null ? null : `Generated in ${formatDuration(seconds)}`;
+  });
   const remaining = computed(() => {
     const progress = generationProgressSignal.get();
     const samples = progressSamplesSignal.get().slice(-8);
@@ -78,7 +82,7 @@ export function ImageViewer() {
       if (!url || !imageReady.get()) return null;
       const result = resultSignal.get();
       const filename = result?.filename ?? result?.settings?.output ?? 'imagegen.png';
-      return html`<div class="download-row"><div><strong>Image ready</strong><p class="field-hint">${result?.savedFile ? `Saved to ${result.savedFile}` : 'Download a copy to your device.'}</p></div><a class="download-link" href=${url} download=${filename}>${DownloadIcon()} Download image</a></div>`;
+      return html`<div class="download-row"><div><strong>Image ready</strong><p class="field-hint">${result?.savedFile ? `Saved to ${result.savedFile}` : 'Download a copy to your device.'}</p>${computed(() => generatedTime.get() ? html`<p class="field-hint">${generatedTime}</p>` : null)}</div><a class="download-link" href=${url} download=${filename}>${DownloadIcon()} Download image</a></div>`;
     })}
     ${computed(() => enhancedPromptSignal.get() ? html`<section class="enhanced-prompt" aria-label="Enhanced prompt"><div class="section-heading"><h3>${resultSignal.get()?.promptRefined ? 'Refined prompt' : 'Generation prompt'}</h3>${Button({ label: 'Copy prompt', icon: CopyIcon(), variant: 'secondary', size: 'small', class: 'quiet-button', onClick: () => { void copyPrompt(); } })}</div><p class="prompt-text">${enhancedPromptSignal}</p><p class="copy-status muted" role="status">${copyStatus}</p>${resultSignal.get()?.settings ? html`<div class="result-settings"><span>Seed ${resultSignal.get()?.settings?.seed}</span><span>${resultSignal.get()?.settings?.steps} steps</span><span>${resultSignal.get()?.settings?.quantize}-bit</span></div>` : null}</section>` : null)}
     <div class="canvas-note"><span class="note-symbol" aria-hidden="true">i</span><p>Start small, then explore. Larger images and higher precision need more memory.</p></div>

@@ -1,6 +1,32 @@
-import { batch, computed, signal } from '@mickyballadelli/matrix';
+import { batch, computed, effect, signal } from '@mickyballadelli/matrix';
 import type { GenerationProgress, GenerationResult, GenerationSettings, RuntimeInfo } from './api';
 
+const settingsStorageKey = 'imagegen.generation-settings';
+type StoredSettings = Partial<GenerationSettings>;
+
+function readStoredSettings(): StoredSettings {
+  try {
+    const raw = localStorage.getItem(settingsStorageKey);
+    if (!raw) return {};
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    const validDimension = (input: unknown): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 256 && input <= 2048 && input % 32 === 0;
+    const validSteps = (input: unknown): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 1 && input <= 100;
+    const validSeed = (input: unknown): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0 && input <= 4294967295;
+    return {
+      width: validDimension(value.width) ? value.width : undefined,
+      height: validDimension(value.height) ? value.height : undefined,
+      steps: validSteps(value.steps) ? value.steps : undefined,
+      seed: validSeed(value.seed) ? value.seed : undefined,
+      quantize: [3, 4, 5, 6, 8].includes(value.quantize as number) ? value.quantize as GenerationSettings['quantize'] : undefined,
+      lowRam: typeof value.lowRam === 'boolean' ? value.lowRam : undefined,
+      output: typeof value.output === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._ -]{0,95}\.png$/i.test(value.output) ? value.output : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+const storedSettings = readStoredSettings();
 export const userPromptSignal = signal('');
 export const enhancedPromptSignal = signal('');
 export const imageUrlSignal = signal('');
@@ -13,14 +39,15 @@ export const motionSignal = signal(true);
 export const elapsedSignal = signal(0);
 export const generationProgressSignal = signal<GenerationProgress | null>(null);
 export const progressSamplesSignal = signal<Array<{ step: number; at: number }>>([]);
+export const generationDurationSignal = signal<number | null>(null);
 // Matrix's numeric input binding emits numbers after edits, strings on reset.
-export const widthSignal = signal<string | number>('512');
-export const heightSignal = signal<string | number>('512');
-export const stepsSignal = signal<string | number>('40');
-export const seedSignal = signal<string | number>('42');
-export const quantizeSignal = signal('4');
-export const lowRamSignal = signal(true);
-export const outputSignal = signal('qwen-test.png');
+export const widthSignal = signal<string | number>(storedSettings.width ?? '512');
+export const heightSignal = signal<string | number>(storedSettings.height ?? '512');
+export const stepsSignal = signal<string | number>(storedSettings.steps ?? '40');
+export const seedSignal = signal<string | number>(storedSettings.seed ?? '42');
+export const quantizeSignal = signal(String(storedSettings.quantize ?? 4));
+export const lowRamSignal = signal(storedSettings.lowRam ?? true);
+export const outputSignal = signal(storedSettings.output ?? 'qwen-test.png');
 export const outputDirectorySignal = computed(() => runtimeSignal.get()?.outputDirectory ?? '~/Desktop');
 export const providerNameSignal = computed(() => runtimeSignal.get()?.imageProvider === 'stable-diffusion' ? 'Stable Diffusion' : 'Qwen-Image 2.1');
 
@@ -32,6 +59,11 @@ export function getSettings(): GenerationSettings {
     lowRam: lowRamSignal.get(), output: outputSignal.get().trim(),
   };
 }
+
+effect(() => {
+  try { localStorage.setItem(settingsStorageKey, JSON.stringify(getSettings())); }
+  catch { /* Browser storage may be unavailable or full. */ }
+});
 
 export const settingsErrorSignal = computed(() => {
   const settings = getSettings();

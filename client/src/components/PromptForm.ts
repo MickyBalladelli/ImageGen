@@ -2,7 +2,7 @@ import { batch, component, computed, html, onUnmount } from '@mickyballadelli/ma
 import { ButtonComponent as Button, SparkIcon, CloseIcon } from '@mickyballadelli/prism';
 import { generateImage, type GenerationProgress } from '../api';
 import { GenerationSettingsComponent } from './GenerationSettings';
-import { userPromptSignal, enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal, resultSignal, runtimeSignal, elapsedSignal, generationProgressSignal, progressSamplesSignal, getSettings, settingsErrorSignal } from '../state';
+import { userPromptSignal, enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal, resultSignal, runtimeSignal, elapsedSignal, generationProgressSignal, progressSamplesSignal, generationDurationSignal, getSettings, settingsErrorSignal } from '../state';
 
 export function PromptForm() {
   let activeController: AbortController | undefined;
@@ -23,7 +23,7 @@ export function PromptForm() {
     batch(() => {
       isLoadingSignal.set(true); errorSignal.set(null); resultSignal.set(null);
       enhancedPromptSignal.set(''); imageUrlSignal.set(''); elapsedSignal.set(0);
-      generationProgressSignal.set({ phase: 'loading', totalSteps: settings.steps }); progressSamplesSignal.set([]);
+      generationProgressSignal.set({ phase: 'loading', totalSteps: settings.steps }); progressSamplesSignal.set([]); generationDurationSignal.set(null);
     });
     try {
       const result = await generateImage(prompt, controller.signal, settings, reportProgress);
@@ -36,6 +36,8 @@ export function PromptForm() {
         : error instanceof TypeError ? 'Cannot reach the server. Check your connection and try again.'
         : error instanceof Error ? error.message : 'Generation failed. Please try again.');
     } finally {
+      const duration = Math.max(1, Math.round((performance.now() - start) / 1000));
+      elapsedSignal.set(duration); generationDurationSignal.set(duration);
       clearTimeout(timeout); clearInterval(clock);
       activeController = undefined; isLoadingSignal.set(false);
     }
