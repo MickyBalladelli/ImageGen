@@ -126,6 +126,11 @@ A web application project for image generation utilizing **Vite**, **TypeScript*
 - [x] Add and run automated backend/provider regression tests and browser integration tests with isolated upstream fixtures.
 - [x] Verify responsive mobile layout and copy/download behavior in Chromium.
 
+## Theme Update
+
+- [x] Apply Prism's `nocturne` theme globally and replace application-specific light colors with Prism tokens, including preview, text, borders, links, focus states, and errors.
+- Live browser preview for this theme change was not verified: the development server was not running on port 5173. No servers were started or restarted.
+
 ## Implementation and Verification Notes
 
 - The existing `ImageGen/` folder was used as the root. The Vite vanilla-TypeScript setup was authored directly rather than running the interactive scaffolder.
