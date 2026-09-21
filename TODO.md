@@ -131,7 +131,22 @@ A web application project for image generation utilizing **Vite**, **TypeScript*
 - [x] Apply Prism's `nocturne` theme globally and replace application-specific light colors with Prism tokens, including preview, text, borders, links, focus states, and errors.
 - Live browser preview for this theme change was not verified: the development server was not running on port 5173. No servers were started or restarted.
 
-## Implementation and Verification Notes
+## Qwen Studio Redesign
+
+- [x] Add the original ImageGen logo/favicon and compact Nocturne studio layout with Prism Veil animation.
+- [x] Add a multiline prompt, prompt ideas, shape presets, width/height, steps, seed/randomize, quantization, low-memory mode, output filename, and command preview.
+- [x] Connect settings to the MFLUX executable; make direct Qwen generation the default without Ollama or ComfyUI.
+- [x] Pause Veil while rendering or while the tab is hidden; support manual pause and reduced motion.
+- [x] Add runtime availability, elapsed time, cancellation, persisted output location, and image download.
+- [x] Validate arguments, run without a shell, prohibit implicit model downloads, preserve existing output files, and clean temporary files.
+- [x] Update environment examples and README, preserving the optional legacy SD/Ollama adapter.
+- [x] Pass TypeScript checks and 26 backend/provider tests, including fixture MFLUX child-process tests.
+- [x] Pass the 8 existing browser tests; fix Matrix numeric-binding handling found by the new settings test, then pass all 3 new studio tests on rerun.
+- Desktop/mobile screenshots were captured, but the file viewer could not open them for visual review. Layout overflow, controls, Veil toggling, reduced motion, and request payloads were checked in browser tests.
+- [ ] Run a real Qwen-Image 2.1 generation and measure memory/performance on the M1 Max. No model render or additional model download was started by this change.
+- No existing development servers were manually restarted. Test processes ran on their own isolated ports.
+
+## Original Implementation and Verification Notes
 
 - The existing `ImageGen/` folder was used as the root. The Vite vanilla-TypeScript setup was authored directly rather than running the interactive scaffolder.
 - The form aliases Prism's actual `TextFieldComponent` and `ButtonComponent` exports as `PrismInput` and `PrismButton`.

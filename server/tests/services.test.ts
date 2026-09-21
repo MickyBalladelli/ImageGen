@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { createServices, imageDataUrl, SYSTEM_PROMPT } from '../services.js';
-import { readConfig } from '../config.js';
+import { readConfig as configFromEnvironment } from '../config.js';
+const readConfig = (env: NodeJS.ProcessEnv) => configFromEnvironment({ IMAGE_PROVIDER: 'stable-diffusion', PROMPT_REFINEMENT: 'ollama', ...env });
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=';
 const signal = () => new AbortController().signal;

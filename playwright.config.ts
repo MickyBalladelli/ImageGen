@@ -15,7 +15,7 @@ export default defineConfig({
         API_PROXY_TARGET: 'http://127.0.0.1:13000',
         CLIENT_ORIGIN: 'http://127.0.0.1:15173',
         OLLAMA_HOST: 'http://127.0.0.1:19001', IMAGE_API_URL: 'http://127.0.0.1:19001',
-        OLLAMA_MODEL: 'test-model',
+        OLLAMA_MODEL: 'test-model', IMAGE_PROVIDER: 'stable-diffusion', PROMPT_REFINEMENT: 'ollama',
       },
     },
   ],

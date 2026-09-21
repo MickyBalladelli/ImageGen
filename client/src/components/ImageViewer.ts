@@ -1,6 +1,7 @@
 import { component, computed, effect, html, signal } from '@mickyballadelli/matrix';
-import { ButtonComponent as PrismButton, SpinnerComponent } from '@mickyballadelli/prism';
-import { enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal } from '../state';
+import { ButtonComponent as Button, SpinnerComponent, CopyIcon, DownloadIcon, ImageIcon } from '@mickyballadelli/prism';
+import { Logo } from './Logo';
+import { enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal, resultSignal, elapsedSignal, providerNameSignal, widthSignal, heightSignal, stepsSignal, quantizeSignal } from '../state';
 
 export function ImageViewer() {
   const imageReady = signal(false);
@@ -8,49 +9,47 @@ export function ImageViewer() {
   const previewUrl = signal('');
   effect(() => {
     const dataUrl = imageUrlSignal.get();
-    imageReady.set(false);
-    copyStatus.set('');
-    previewUrl.set('');
+    imageReady.set(false); copyStatus.set(''); previewUrl.set('');
     if (!dataUrl) return;
-    // Matrix rejects dynamic data: URLs. Convert validated raster data into a
-    // scoped Blob URL rather than bypassing the renderer's URL safety checks.
     const [header, encoded] = dataUrl.split(',');
     const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
     const url = URL.createObjectURL(new Blob([bytes], { type: header.slice(5, -7) }));
     previewUrl.set(url);
     return () => URL.revokeObjectURL(url);
   });
-
   async function copyPrompt() {
     const prompt = enhancedPromptSignal.get();
-    try {
-      await navigator.clipboard.writeText(prompt);
-      if (enhancedPromptSignal.get() === prompt) copyStatus.set('Prompt copied.');
-    } catch {
-      copyStatus.set('Copy is unavailable. Select the prompt text and copy it manually.');
-    }
+    try { await navigator.clipboard.writeText(prompt); if (enhancedPromptSignal.get() === prompt) copyStatus.set('Prompt copied.'); }
+    catch { copyStatus.set('Copy is unavailable. Select the prompt text and copy it manually.'); }
   }
+  const dimensions = computed(() => {
+    const settings = resultSignal.get()?.settings;
+    return settings ? `${settings.width} × ${settings.height}` : `${widthSignal.get()} × ${heightSignal.get()}`;
+  });
+  const elapsed = computed(() => `${Math.floor(elapsedSignal.get() / 60)}:${String(elapsedSignal.get() % 60).padStart(2, '0')}`);
 
   return html`<section class="result" aria-label="Image result">
-    <div class="section-heading"><h2>Your image</h2><span class="muted">${computed(() => isLoadingSignal.get() ? 'Working' : imageReady.get() ? 'Ready' : 'Preview')}</span></div>
+    <div class="canvas-toolbar"><h2>${ImageIcon()} Your canvas</h2><div><span class="canvas-dimensions">${dimensions}</span><span class="canvas-status">${computed(() => isLoadingSignal.get() ? 'Rendering' : imageReady.get() ? 'Complete' : 'Preview')}</span></div></div>
     <div class="feedback" role="alert">${computed(() => errorSignal.get() ? html`<p class="error-message">${errorSignal.get()}</p>` : null)}</div>
-    <div class="image-stage" aria-busy=${computed(() => String(isLoadingSignal.get()))}>
+    <div class=${computed(() => `image-stage ${imageReady.get() ? 'has-image' : ''}`)} aria-busy=${computed(() => String(isLoadingSignal.get()))}>
+      <span class="canvas-corner corner-tl" aria-hidden="true"></span><span class="canvas-corner corner-tr" aria-hidden="true"></span><span class="canvas-corner corner-bl" aria-hidden="true"></span><span class="canvas-corner corner-br" aria-hidden="true"></span>
       ${computed(() => {
-        if (isLoadingSignal.get()) return html`<div class="placeholder" role="status">${SpinnerComponent({ ariaLabel: 'Generating image' })}<h3>From idea to image</h3><p>Refining your prompt, then rendering.<br />This may take a few minutes on local hardware.</p></div>`;
+        if (isLoadingSignal.get()) return html`<div class="placeholder loading-placeholder" role="status"><div class="loading-orbit">${SpinnerComponent({ ariaLabel: 'Generating image' })}</div><span class="elapsed-time">${elapsed}</span><h3>Bringing the scene to life.</h3><p>Loading the model and rendering on your machine.<br />The first image can take several minutes.</p><div class="indeterminate-track" aria-hidden="true"><span></span></div></div>`;
         const url = previewUrl.get();
         if (url) return html`<img src=${url} alt="Generated image" @load=${() => imageReady.set(true)} @error=${() => { imageReady.set(false); errorSignal.set('The image could not be displayed. Try generating it again.'); }} />`;
-        return html`<div class="placeholder"><svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true"><rect x="6" y="6" width="44" height="44" rx="7" stroke="currentColor" stroke-width="1.5"/><circle cx="20" cy="20" r="4" stroke="currentColor" stroke-width="1.5"/><path d="m9 42 13-13 9 9 6-7 10 11" stroke="currentColor" stroke-width="1.5"/></svg><h3>A space for your next idea</h3><p>Describe a scene and generate your first image.</p></div>`;
+        return html`<div class="placeholder empty-placeholder"><div class="canvas-emblem"><span></span><span></span>${Logo()}</div><h3>The next frame is yours.</h3><p>Describe a scene, shape the settings,<br />and see where your imagination goes.</p><div class="canvas-empty-tags"><span>${dimensions} px</span><span>${computed(() => `${stepsSignal.get()} steps`)}</span><span>${computed(() => `${quantizeSignal.get()}-bit`)}</span></div></div>`;
       })}
     </div>
+    <div class="canvas-bottom-bar"><span>${providerNameSignal}</span><span>${computed(() => imageReady.get() ? 'PNG / ready to save' : 'Image output appears here')}</span></div>
     ${computed(() => {
       const url = previewUrl.get();
       if (!url || !imageReady.get()) return null;
-      const dataUrl = imageUrlSignal.get();
-      const extension = dataUrl.startsWith('data:image/jpeg') ? 'jpg' : dataUrl.startsWith('data:image/webp') ? 'webp' : 'png';
-      return html`<div class="download-row"><span class="muted">Generated with Stable Diffusion</span><a class="download-link" href=${url} download=${`imagegen.${extension}`}>Download image</a></div>`;
+      const result = resultSignal.get();
+      const filename = result?.filename ?? result?.settings?.output ?? 'imagegen.png';
+      return html`<div class="download-row"><div><strong>Image ready</strong><p class="field-hint">${result?.savedFile ? `Saved to ${result.savedFile}` : 'Download a copy to your device.'}</p></div><a class="download-link" href=${url} download=${filename}>${DownloadIcon()} Download image</a></div>`;
     })}
-    ${computed(() => enhancedPromptSignal.get() ? html`<section class="enhanced-prompt" aria-label="Enhanced prompt"><div class="section-heading"><h3>Refined prompt</h3>${PrismButton({ label: 'Copy prompt', variant: 'secondary', size: 'small', onClick: () => { void copyPrompt(); } })}</div><p class="prompt-text">${enhancedPromptSignal}</p><p class="copy-status muted" role="status">${copyStatus}</p></section>` : null)}
+    ${computed(() => enhancedPromptSignal.get() ? html`<section class="enhanced-prompt" aria-label="Enhanced prompt"><div class="section-heading"><h3>${resultSignal.get()?.promptRefined ? 'Refined prompt' : 'Generation prompt'}</h3>${Button({ label: 'Copy prompt', icon: CopyIcon(), variant: 'secondary', size: 'small', class: 'quiet-button', onClick: () => { void copyPrompt(); } })}</div><p class="prompt-text">${enhancedPromptSignal}</p><p class="copy-status muted" role="status">${copyStatus}</p>${resultSignal.get()?.settings ? html`<div class="result-settings"><span>Seed ${resultSignal.get()?.settings?.seed}</span><span>${resultSignal.get()?.settings?.steps} steps</span><span>${resultSignal.get()?.settings?.quantize}-bit</span></div>` : null}</section>` : null)}
+    <div class="canvas-note"><span class="note-symbol" aria-hidden="true">i</span><p>Start small, then explore. Larger images and higher precision need more memory.</p></div>
   </section>`;
 }
-
 export const ImageViewerComponent = () => component(ImageViewer);

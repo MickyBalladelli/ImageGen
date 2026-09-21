@@ -38,9 +38,9 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
     }
     return parsed.toString().replace(/\/$/, '');
   };
-  const width = integer('IMAGE_WIDTH', 512, 64, 2048);
-  const height = integer('IMAGE_HEIGHT', 512, 64, 2048);
-  if (width % 8 || height % 8) throw new Error('Image dimensions must be multiples of 8.');
+  const width = integer('IMAGE_WIDTH', 512, 256, 2048);
+  const height = integer('IMAGE_HEIGHT', 512, 256, 2048);
+  if (width % 32 || height % 32) throw new Error('Image dimensions must be multiples of 32.');
   const imageProvider = env.IMAGE_PROVIDER || 'mflux';
   if (!['mflux', 'stable-diffusion'].includes(imageProvider)) throw new Error('IMAGE_PROVIDER must be mflux or stable-diffusion.');
   const promptRefinement = env.PROMPT_REFINEMENT || (imageProvider === 'mflux' ? 'none' : 'ollama');

@@ -11,10 +11,11 @@ export const runtimeSignal = signal<RuntimeInfo | null>(null);
 export const runtimeErrorSignal = signal(false);
 export const motionSignal = signal(true);
 export const elapsedSignal = signal(0);
-export const widthSignal = signal('512');
-export const heightSignal = signal('512');
-export const stepsSignal = signal('40');
-export const seedSignal = signal('42');
+// Matrix's numeric input binding emits numbers after edits, strings on reset.
+export const widthSignal = signal<string | number>('512');
+export const heightSignal = signal<string | number>('512');
+export const stepsSignal = signal<string | number>('40');
+export const seedSignal = signal<string | number>('42');
 export const quantizeSignal = signal('4');
 export const lowRamSignal = signal(true);
 export const outputSignal = signal('qwen-test.png');
@@ -34,7 +35,7 @@ export const settingsErrorSignal = computed(() => {
   const settings = getSettings();
   if (![settings.width, settings.height].every(n => Number.isInteger(n) && n >= 256 && n <= 2048 && n % 32 === 0)) return 'Dimensions must be 256–2048 px, in multiples of 32.';
   if (!Number.isInteger(settings.steps) || settings.steps < 1 || settings.steps > 100) return 'Use 1–100 sampling steps.';
-  if (!seedSignal.get().trim() || !Number.isInteger(settings.seed) || settings.seed < 0 || settings.seed > 4294967295) return 'Seed must be an integer from 0 to 4294967295.';
+  if (!String(seedSignal.get()).trim() || !Number.isInteger(settings.seed) || settings.seed < 0 || settings.seed > 4294967295) return 'Seed must be an integer from 0 to 4294967295.';
   if (![3, 4, 5, 6, 8].includes(settings.quantize)) return 'Choose a supported quantization.';
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._ -]{0,95}\.png$/i.test(settings.output)) return 'Use a PNG filename without folders or special characters.';
   return null;

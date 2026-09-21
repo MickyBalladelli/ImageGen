@@ -2,7 +2,7 @@ import { batch, component, computed, html, signal, type Signal } from '@mickybal
 import { ButtonComponent as Button, CheckBoxComponent, SelectComponent, TextFieldComponent, SettingsIcon, TerminalIcon, CopyIcon } from '@mickyballadelli/prism';
 import { widthSignal, heightSignal, stepsSignal, seedSignal, quantizeSignal, lowRamSignal, outputSignal, outputDirectorySignal, isLoadingSignal, commandSignal, settingsErrorSignal, resetSettings, runtimeSignal } from '../state';
 
-function numberField(label: string, id: string, value: Signal<string>, suffix?: string) {
+function numberField(label: string, id: string, value: Signal<string | number>, suffix?: string) {
   return html`<div class="setting-field"><label for=${id}>${label}</label><div class="number-field">${TextFieldComponent({ id, value, type: 'number', inputMode: 'numeric', disabled: isLoadingSignal })}${suffix ? html`<span class="field-unit">${suffix}</span>` : null}</div></div>`;
 }
 

@@ -21,7 +21,7 @@ declare module '@mickyballadelli/prism' {
   }
   export function ButtonComponent(props: ButtonProps): ComponentResult;
   export function TextFieldComponent(props: {
-    id?: string; name?: string; value?: Signal<string>; placeholder?: string;
+    id?: string; name?: string; value?: Signal<string> | Signal<string | number>; placeholder?: string;
     disabled?: Value<boolean>; required?: boolean; maxLength?: number;
     ariaDescribedBy?: string; ariaInvalid?: Value<boolean>; autocomplete?: string;
     type?: string; inputMode?: string; class?: string;

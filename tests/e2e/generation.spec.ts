@@ -26,7 +26,7 @@ test('prompt flows through Vite proxy, Express, Ollama SDK and image adapter', a
   expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('An astronaut cat');
   const downloadEvent = page.waitForEvent('download');
   await page.getByRole('link', { name: 'Download image' }).click();
-  expect((await downloadEvent).suggestedFilename()).toBe('imagegen.png');
+  expect((await downloadEvent).suggestedFilename()).toBe('qwen-test.png');
   expect(errors).toEqual([]);
 });
 
