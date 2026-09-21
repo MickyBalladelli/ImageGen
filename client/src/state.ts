@@ -2,7 +2,14 @@ import { batch, computed, effect, signal } from '@mickyballadelli/matrix';
 import type { GenerationProgress, GenerationResult, GenerationSettings, RuntimeInfo } from './api';
 
 const settingsStorageKey = 'imagegen.generation-settings';
+const promptHistoryStorageKey = 'imagegen.prompt-history';
 type StoredSettings = Partial<GenerationSettings>;
+export interface PromptHistoryItem {
+  id: string;
+  prompt: string;
+  createdAt: number;
+  updatedAt: number;
+}
 
 function readStoredSettings(): StoredSettings {
   try {
@@ -27,6 +34,22 @@ function readStoredSettings(): StoredSettings {
 }
 
 const storedSettings = readStoredSettings();
+function readStoredPromptHistory(): PromptHistoryItem[] {
+  try {
+    const raw = localStorage.getItem(promptHistoryStorageKey);
+    if (!raw) return [];
+    const value = JSON.parse(raw) as unknown;
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is PromptHistoryItem => {
+      const entry = item as Partial<PromptHistoryItem> | null;
+      return typeof entry?.id === 'string' && typeof entry.prompt === 'string' && Boolean(entry.prompt.trim())
+        && typeof entry.createdAt === 'number' && typeof entry.updatedAt === 'number';
+    }).slice(0, 30);
+  } catch {
+    return [];
+  }
+}
+
 export const userPromptSignal = signal('');
 export const enhancedPromptSignal = signal('');
 export const imageUrlSignal = signal('');
@@ -48,6 +71,8 @@ export const seedSignal = signal<string | number>(storedSettings.seed ?? '42');
 export const quantizeSignal = signal(String(storedSettings.quantize ?? 4));
 export const lowRamSignal = signal(storedSettings.lowRam ?? true);
 export const outputSignal = signal(storedSettings.output ?? 'qwen-test.png');
+export const promptHistorySignal = signal<PromptHistoryItem[]>(readStoredPromptHistory());
+export const editingPromptIdSignal = signal<string | null>(null);
 export const outputDirectorySignal = computed(() => runtimeSignal.get()?.outputDirectory ?? '~/Desktop');
 export const providerNameSignal = computed(() => runtimeSignal.get()?.imageProvider === 'stable-diffusion' ? 'Stable Diffusion' : 'Qwen-Image 2.1');
 
@@ -60,8 +85,55 @@ export function getSettings(): GenerationSettings {
   };
 }
 
+export function readPromptHistory() {
+  return promptHistorySignal.get();
+}
+
+function promptId() {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function createPromptHistory(prompt: string) {
+  const normalized = prompt.trim();
+  if (!normalized) return null;
+  const now = Date.now();
+  const existing = promptHistorySignal.get().find(item => item.prompt === normalized);
+  const item = existing
+    ? { ...existing, updatedAt: now }
+    : { id: promptId(), prompt: normalized, createdAt: now, updatedAt: now };
+  promptHistorySignal.set([item, ...promptHistorySignal.get().filter(entry => entry.id !== item.id)].slice(0, 30));
+  return item.id;
+}
+
+export function updatePromptHistory(id: string, prompt: string) {
+  const normalized = prompt.trim();
+  if (!normalized || !promptHistorySignal.get().some(item => item.id === id)) return false;
+  const now = Date.now();
+  promptHistorySignal.set(promptHistorySignal.get().map(item => item.id === id
+    ? { ...item, prompt: normalized, updatedAt: now }
+    : item));
+  return true;
+}
+
+export function deletePromptHistory(id: string) {
+  promptHistorySignal.set(promptHistorySignal.get().filter(item => item.id !== id));
+  if (editingPromptIdSignal.get() === id) editingPromptIdSignal.set(null);
+}
+
+export function clearPromptHistory() {
+  promptHistorySignal.set([]);
+  editingPromptIdSignal.set(null);
+}
+
 effect(() => {
   try { localStorage.setItem(settingsStorageKey, JSON.stringify(getSettings())); }
+  catch { /* Browser storage may be unavailable or full. */ }
+});
+
+effect(() => {
+  try { localStorage.setItem(promptHistoryStorageKey, JSON.stringify(promptHistorySignal.get())); }
   catch { /* Browser storage may be unavailable or full. */ }
 });
 
