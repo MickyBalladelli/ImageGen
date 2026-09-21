@@ -5,7 +5,21 @@ import { enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal } fr
 export function ImageViewer() {
   const imageReady = signal(false);
   const copyStatus = signal('');
-  effect(() => { imageUrlSignal.get(); imageReady.set(false); copyStatus.set(''); });
+  const previewUrl = signal('');
+  effect(() => {
+    const dataUrl = imageUrlSignal.get();
+    imageReady.set(false);
+    copyStatus.set('');
+    previewUrl.set('');
+    if (!dataUrl) return;
+    // Matrix rejects dynamic data: URLs. Convert validated raster data into a
+    // scoped Blob URL rather than bypassing the renderer's URL safety checks.
+    const [header, encoded] = dataUrl.split(',');
+    const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: header.slice(5, -7) }));
+    previewUrl.set(url);
+    return () => URL.revokeObjectURL(url);
+  });
 
   async function copyPrompt() {
     const prompt = enhancedPromptSignal.get();
