@@ -3,10 +3,11 @@ import type { Config } from './config.js';
 import { AppError } from './errors.js';
 import { generateWithMflux, type MfluxResult } from './mflux.js';
 import { parseSettings, type GenerationSettings } from './settings.js';
+import type { ProgressListener } from './progress.js';
 
 export interface GenerationServices {
   enhance(prompt: string, signal: AbortSignal): Promise<string>;
-  generate(prompt: string, signal: AbortSignal, settings?: GenerationSettings): Promise<string | MfluxResult>;
+  generate(prompt: string, signal: AbortSignal, settings?: GenerationSettings, onProgress?: ProgressListener): Promise<string | MfluxResult>;
 }
 
 export const SYSTEM_PROMPT = `You refine prompts for a text-to-image diffusion model.
@@ -108,9 +109,10 @@ export function createServices(config: Config, fetcher: typeof fetch = fetch): G
       if (!enhanced || enhanced.length > 8000) throw new AppError(502, 'Ollama returned an empty or oversized prompt.');
       return enhanced;
     }),
-    generate: (prompt, parent, settings = parseSettings(undefined, config)) => config.imageProvider === 'mflux'
-      ? timed('MFLUX', config.mfluxTimeoutMs, parent, signal => generateWithMflux(config, prompt, settings, signal))
+    generate: (prompt, parent, settings = parseSettings(undefined, config), onProgress) => config.imageProvider === 'mflux'
+      ? timed('MFLUX', config.mfluxTimeoutMs, parent, signal => generateWithMflux(config, prompt, settings, signal, onProgress))
       : timed('Stable Diffusion', config.imageTimeoutMs, parent, async signal => {
+      onProgress?.({ phase: 'rendering', totalSteps: settings.steps })
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (config.imageApiUsername) {
         headers.Authorization = `Basic ${Buffer.from(`${config.imageApiUsername}:${config.imageApiPassword}`).toString('base64')}`;

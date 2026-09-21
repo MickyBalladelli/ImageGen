@@ -1,8 +1,8 @@
 import { batch, component, computed, html, onUnmount } from '@mickyballadelli/matrix';
 import { ButtonComponent as Button, SparkIcon, CloseIcon } from '@mickyballadelli/prism';
-import { generateImage } from '../api';
+import { generateImage, type GenerationProgress } from '../api';
 import { GenerationSettingsComponent } from './GenerationSettings';
-import { userPromptSignal, enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal, resultSignal, runtimeSignal, elapsedSignal, getSettings, settingsErrorSignal } from '../state';
+import { userPromptSignal, enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal, resultSignal, runtimeSignal, elapsedSignal, generationProgressSignal, progressSamplesSignal, getSettings, settingsErrorSignal } from '../state';
 
 export function PromptForm() {
   let activeController: AbortController | undefined;
@@ -23,9 +23,10 @@ export function PromptForm() {
     batch(() => {
       isLoadingSignal.set(true); errorSignal.set(null); resultSignal.set(null);
       enhancedPromptSignal.set(''); imageUrlSignal.set(''); elapsedSignal.set(0);
+      generationProgressSignal.set({ phase: 'loading', totalSteps: settings.steps }); progressSamplesSignal.set([]);
     });
     try {
-      const result = await generateImage(prompt, controller.signal, settings);
+      const result = await generateImage(prompt, controller.signal, settings, reportProgress);
       batch(() => {
         resultSignal.set(result); enhancedPromptSignal.set(result.enhancedPrompt); imageUrlSignal.set(result.imageUrl);
       });
@@ -43,6 +44,16 @@ export function PromptForm() {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault(); (event.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
     }
+  }
+  function reportProgress(progress: GenerationProgress) {
+    if (progress.phase === 'rendering' && Number.isInteger(progress.step)) {
+      const samples = progressSamplesSignal.get();
+      const previous = samples[samples.length - 1];
+      if (!previous || previous.step !== progress.step) {
+        progressSamplesSignal.set([...samples, { step: progress.step as number, at: performance.now() }].slice(-8));
+      }
+    }
+    generationProgressSignal.set(progress);
   }
   return html`<form class="prompt-form" @submit=${submit} novalidate>
     <section class="prompt-panel">

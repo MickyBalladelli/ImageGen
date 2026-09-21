@@ -5,6 +5,7 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { Config } from './config.js';
 import type { GenerationSettings } from './settings.js';
+import type { ProgressListener } from './progress.js';
 import { AppError } from './errors.js';
 
 export interface MfluxResult { imageUrl: string; savedFile: string; filename: string }
@@ -21,7 +22,22 @@ export async function mfluxInstalled(config: Config): Promise<boolean> {
   try { await access(config.mfluxBinary, constants.X_OK); return true; } catch { return false; }
 }
 
-async function executeMflux(binary: string, args: string[], signal: AbortSignal): Promise<void> {
+function parseProgress(line: string, fallbackTotal: number) {
+  const match = line.match(/(?:^|\s)(\d+)\s*\/\s*(\d+)(?:\s|$)/)
+  if (!match) return null
+  const step = Number(match[1])
+  const totalSteps = Number(match[2]) || fallbackTotal
+  if (!Number.isInteger(step) || !Number.isInteger(totalSteps) || step < 0 || totalSteps < 1 || step > totalSteps) return null
+  return { step, totalSteps }
+}
+
+async function executeMflux(
+  binary: string,
+  args: string[],
+  signal: AbortSignal,
+  totalSteps: number,
+  onProgress?: ProgressListener,
+): Promise<void> {
   signal.throwIfAborted();
   await new Promise<void>((resolve, reject) => {
     const child = spawn(binary, args, {
@@ -31,8 +47,22 @@ async function executeMflux(binary: string, args: string[], signal: AbortSignal)
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let diagnostic = '';
+    let progressBuffer = '';
+    let lastStep = -1;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
-    const collect = (chunk: Buffer) => { diagnostic = (diagnostic + chunk.toString()).slice(-16000); };
+    const collect = (chunk: Buffer) => {
+      const text = chunk.toString()
+      diagnostic = (diagnostic + text).slice(-16000)
+      progressBuffer += text
+      const lines = progressBuffer.split(/[\r\n]+/)
+      progressBuffer = lines.pop() ?? ''
+      for (const line of lines) {
+        const progress = parseProgress(line, totalSteps)
+        if (!progress || progress.step === lastStep) continue
+        lastStep = progress.step
+        onProgress?.({ phase: 'rendering', ...progress })
+      }
+    };
     child.stdout.on('data', collect);
     child.stderr.on('data', collect);
     const abort = () => {
@@ -79,12 +109,20 @@ async function saveWithoutOverwrite(source: string, directory: string, filename:
   throw new AppError(409, 'Too many images use this filename. Choose a different output name.');
 }
 
-export async function generateWithMflux(config: Config, prompt: string, settings: GenerationSettings, signal: AbortSignal): Promise<MfluxResult> {
+export async function generateWithMflux(
+  config: Config,
+  prompt: string,
+  settings: GenerationSettings,
+  signal: AbortSignal,
+  onProgress?: ProgressListener,
+): Promise<MfluxResult> {
   const directory = await mkdtemp(join(tmpdir(), 'imagegen-'));
   const output = join(directory, 'result.png');
   try {
-    await executeMflux(config.mfluxBinary, mfluxArguments(prompt, settings, output), signal);
+    onProgress?.({ phase: 'loading', totalSteps: settings.steps })
+    await executeMflux(config.mfluxBinary, mfluxArguments(prompt, settings, output), signal, settings.steps, onProgress);
     signal.throwIfAborted();
+    onProgress?.({ phase: 'saving', step: settings.steps, totalSteps: settings.steps })
     const info = await stat(output).catch(() => { throw new AppError(502, 'MFLUX exited without producing an image. Check memory and battery level.'); });
     if (!info.isFile() || info.size > 18 * 1024 * 1024) throw new AppError(502, 'MFLUX output exceeds the 18 MB image limit.');
     const image = await readFile(output);

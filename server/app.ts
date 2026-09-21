@@ -53,22 +53,36 @@ export function createApp(config: Config, services: GenerationServices, clientDi
     }
     active += 1;
     const controller = new AbortController();
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+    const sendEvent = (event: string, data: unknown) => {
+      if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
     const disconnected = () => { if (!res.writableEnded) controller.abort(); };
     res.on('close', disconnected);
     try {
+      if (config.promptRefinement === 'ollama') sendEvent('progress', { phase: 'refining' });
       const enhancedPrompt = await services.enhance(prompt.trim(), controller.signal);
       controller.signal.throwIfAborted();
-      const generated = await services.generate(enhancedPrompt, controller.signal, settings);
+      const generated = await services.generate(enhancedPrompt, controller.signal, settings, progress => sendEvent('progress', progress));
       const imageUrl = typeof generated === 'string' ? generated : generated.imageUrl;
-      if (!controller.signal.aborted) res.json({
-        enhancedPrompt, imageUrl, error: null,
+      if (!controller.signal.aborted) {
+        sendEvent('complete', {
+          enhancedPrompt, imageUrl, error: null,
         ...(req.body?.settings || typeof generated !== 'string' ? {
           settings, provider: config.imageProvider, promptRefined: config.promptRefinement === 'ollama',
         } : {}),
         ...(typeof generated !== 'string' ? { savedFile: generated.savedFile, filename: generated.filename } : {}),
-      });
+        });
+        res.end();
+      }
     } catch (error) {
-      if (!controller.signal.aborted) next(error);
+      if (!controller.signal.aborted && !res.writableEnded) {
+        sendEvent('error', { error: error instanceof AppError ? error.message : 'An unexpected error occurred.' });
+        res.end();
+      }
     } finally {
       active -= 1;
       res.off('close', disconnected);

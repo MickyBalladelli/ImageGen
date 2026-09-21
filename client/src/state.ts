@@ -1,5 +1,5 @@
 import { batch, computed, signal } from '@mickyballadelli/matrix';
-import type { GenerationResult, GenerationSettings, RuntimeInfo } from './api';
+import type { GenerationProgress, GenerationResult, GenerationSettings, RuntimeInfo } from './api';
 
 export const userPromptSignal = signal('');
 export const enhancedPromptSignal = signal('');
@@ -11,6 +11,8 @@ export const runtimeSignal = signal<RuntimeInfo | null>(null);
 export const runtimeErrorSignal = signal(false);
 export const motionSignal = signal(true);
 export const elapsedSignal = signal(0);
+export const generationProgressSignal = signal<GenerationProgress | null>(null);
+export const progressSamplesSignal = signal<Array<{ step: number; at: number }>>([]);
 // Matrix's numeric input binding emits numbers after edits, strings on reset.
 export const widthSignal = signal<string | number>('512');
 export const heightSignal = signal<string | number>('512');
