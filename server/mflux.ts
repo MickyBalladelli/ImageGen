@@ -29,6 +29,7 @@ function parseProgress(line: string, fallbackTotal: number) {
   const step = Number(match[1])
   const totalSteps = Number(match[2]) || fallbackTotal
   if (!Number.isInteger(step) || !Number.isInteger(totalSteps) || step < 0 || totalSteps < 1 || step > totalSteps) return null
+  if (totalSteps !== fallbackTotal && !/\bstep/i.test(line)) return null
   return { step, totalSteps }
 }
 
@@ -51,18 +52,19 @@ async function executeMflux(
     let progressBuffer = '';
     let lastStep = -1;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
+    const emitProgress = (line: string) => {
+      const progress = parseProgress(line, totalSteps)
+      if (!progress || progress.step === lastStep) return
+      lastStep = progress.step
+      onProgress?.({ phase: 'rendering', ...progress })
+    };
     const collect = (chunk: Buffer) => {
       const text = chunk.toString()
       diagnostic = (diagnostic + text).slice(-16000)
       progressBuffer += text
       const lines = progressBuffer.split(/[\r\n]+/)
       progressBuffer = lines.pop() ?? ''
-      for (const line of lines) {
-        const progress = parseProgress(line, totalSteps)
-        if (!progress || progress.step === lastStep) continue
-        lastStep = progress.step
-        onProgress?.({ phase: 'rendering', ...progress })
-      }
+      for (const line of lines) emitProgress(line)
     };
     child.stdout.on('data', collect);
     child.stderr.on('data', collect);
@@ -81,6 +83,7 @@ async function executeMflux(
         : 'MFLUX could not start. Check executable permissions and MFLUX_BINARY.'));
     });
     child.once('close', (code, exitSignal) => {
+      if (progressBuffer) emitProgress(progressBuffer)
       cleanup();
       if (signal.aborted) return reject(signal.reason);
       if (code === 0) return resolve();
