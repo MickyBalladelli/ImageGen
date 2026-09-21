@@ -43,7 +43,8 @@ function readStoredPromptHistory(): PromptHistoryItem[] {
     return value.filter((item): item is PromptHistoryItem => {
       const entry = item as Partial<PromptHistoryItem> | null;
       return typeof entry?.id === 'string' && typeof entry.prompt === 'string' && Boolean(entry.prompt.trim())
-        && typeof entry.createdAt === 'number' && typeof entry.updatedAt === 'number';
+        && typeof entry.createdAt === 'number' && Number.isFinite(entry.createdAt)
+        && typeof entry.updatedAt === 'number' && Number.isFinite(entry.updatedAt);
     }).slice(0, 30);
   } catch {
     return [];

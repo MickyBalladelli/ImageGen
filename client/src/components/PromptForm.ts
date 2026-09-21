@@ -2,7 +2,8 @@ import { batch, component, computed, html, onUnmount } from '@mickyballadelli/ma
 import { ButtonComponent as Button, SparkIcon, CloseIcon } from '@mickyballadelli/prism';
 import { generateImage, type GenerationProgress } from '../api';
 import { GenerationSettingsComponent } from './GenerationSettings';
-import { userPromptSignal, enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal, resultSignal, runtimeSignal, elapsedSignal, generationProgressSignal, progressSamplesSignal, generationDurationSignal, getSettings, settingsErrorSignal } from '../state';
+import { PromptHistoryComponent } from './PromptHistory';
+import { userPromptSignal, enhancedPromptSignal, imageUrlSignal, isLoadingSignal, errorSignal, resultSignal, runtimeSignal, elapsedSignal, generationProgressSignal, progressSamplesSignal, generationDurationSignal, editingPromptIdSignal, createPromptHistory, updatePromptHistory, getSettings, settingsErrorSignal } from '../state';
 
 export function PromptForm() {
   let activeController: AbortController | undefined;
@@ -15,6 +16,9 @@ export function PromptForm() {
     if (!prompt || prompt.length > 2000) { errorSignal.set('Describe an image in 1–2000 characters.'); return; }
     if (settingsErrorSignal.get()) { errorSignal.set(settingsErrorSignal.get()); return; }
     const settings = getSettings();
+    const editingId = editingPromptIdSignal.get();
+    if (editingId && updatePromptHistory(editingId, prompt)) editingPromptIdSignal.set(null);
+    else createPromptHistory(prompt);
     const controller = new AbortController();
     activeController = controller;
     const timeout = setTimeout(() => controller.abort('timeout'), runtimeSignal.get()?.timeoutMs ?? 3735000);
@@ -75,6 +79,7 @@ export function PromptForm() {
         { label: 'Botanical study', prompt: 'An intricate botanical illustration of luminous wildflowers on deep navy paper, fine silver ink, delicate textures' },
       ].map(example => Button({ label: example.label, variant: 'secondary', size: 'small', class: 'example-button', disabled: isLoadingSignal, onClick: () => userPromptSignal.set(example.prompt) }))}</div>
     </section>
+    ${PromptHistoryComponent()}
     ${GenerationSettingsComponent()}
   </form>`;
 }
