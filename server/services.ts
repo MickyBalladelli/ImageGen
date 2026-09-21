@@ -1,10 +1,12 @@
 import { Ollama } from 'ollama';
 import type { Config } from './config.js';
 import { AppError } from './errors.js';
+import { generateWithMflux, type MfluxResult } from './mflux.js';
+import { parseSettings, type GenerationSettings } from './settings.js';
 
 export interface GenerationServices {
   enhance(prompt: string, signal: AbortSignal): Promise<string>;
-  generate(prompt: string, signal: AbortSignal): Promise<string>;
+  generate(prompt: string, signal: AbortSignal, settings?: GenerationSettings): Promise<string | MfluxResult>;
 }
 
 export const SYSTEM_PROMPT = `You refine prompts for a text-to-image diffusion model.
@@ -74,7 +76,9 @@ export function imageDataUrl(raw: unknown): string {
 
 export function createServices(config: Config, fetcher: typeof fetch = fetch): GenerationServices {
   return {
-    enhance: (prompt, parent) => timed('Ollama', config.ollamaTimeoutMs, parent, async signal => {
+    enhance: (prompt, parent) => config.promptRefinement === 'none'
+      ? Promise.resolve(prompt)
+      : timed('Ollama', config.ollamaTimeoutMs, parent, async signal => {
       // One client per request: cancellation cannot abort another user's request.
       const ollama = new Ollama({
         host: config.ollamaHost,
@@ -104,7 +108,9 @@ export function createServices(config: Config, fetcher: typeof fetch = fetch): G
       if (!enhanced || enhanced.length > 8000) throw new AppError(502, 'Ollama returned an empty or oversized prompt.');
       return enhanced;
     }),
-    generate: (prompt, parent) => timed('Stable Diffusion', config.imageTimeoutMs, parent, async signal => {
+    generate: (prompt, parent, settings = parseSettings(undefined, config)) => config.imageProvider === 'mflux'
+      ? timed('MFLUX', config.mfluxTimeoutMs, parent, signal => generateWithMflux(config, prompt, settings, signal))
+      : timed('Stable Diffusion', config.imageTimeoutMs, parent, async signal => {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (config.imageApiUsername) {
         headers.Authorization = `Basic ${Buffer.from(`${config.imageApiUsername}:${config.imageApiPassword}`).toString('base64')}`;
@@ -112,7 +118,7 @@ export function createServices(config: Config, fetcher: typeof fetch = fetch): G
       const response = await fetcher(`${config.imageApiUrl}/sdapi/v1/txt2img`, {
         method: 'POST', headers, signal,
         body: JSON.stringify({
-          prompt, steps: config.steps, width: config.width, height: config.height,
+          prompt, steps: settings.steps, width: settings.width, height: settings.height, seed: settings.seed,
           batch_size: 1, n_iter: 1, send_images: true, save_images: false,
         }),
       });

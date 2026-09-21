@@ -3,6 +3,9 @@ import cors from 'cors';
 import type { Config } from './config.js';
 import { AppError } from './errors.js';
 import type { GenerationServices } from './services.js';
+import { parseSettings } from './settings.js';
+import { mfluxInstalled } from './mflux.js';
+import { homedir } from 'node:os';
 
 export function createApp(config: Config, services: GenerationServices, clientDirectory?: string) {
   const app = express();
@@ -25,7 +28,16 @@ export function createApp(config: Config, services: GenerationServices, clientDi
   }));
   app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   app.use(express.json({ limit: '16kb' }));
-  app.get('/api/health', (_req, res) => res.json({ status: 'ok', model: config.ollamaModel, imageProvider: 'stable-diffusion' }));
+  app.get('/api/health', async (_req, res) => res.json({
+    status: 'ok',
+    model: config.imageProvider === 'mflux' ? 'Qwen-Image 2.1' : 'Stable Diffusion',
+    imageProvider: config.imageProvider,
+    promptRefinement: config.promptRefinement,
+    runtimeInstalled: config.imageProvider === 'mflux' ? await mfluxInstalled(config) : null,
+    outputDirectory: config.outputDirectory.startsWith(`${homedir()}/`)
+      ? `~/${config.outputDirectory.slice(homedir().length + 1)}` : config.outputDirectory,
+    timeoutMs: config.ollamaTimeoutMs + (config.imageProvider === 'mflux' ? config.mfluxTimeoutMs : config.imageTimeoutMs) + 15000,
+  }));
 
   let active = 0;
   app.post('/api/generate', async (req, res, next) => {
@@ -33,6 +45,8 @@ export function createApp(config: Config, services: GenerationServices, clientDi
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 2000) {
       return next(new AppError(400, 'userPrompt must be a non-empty string of at most 2000 characters.'));
     }
+    let settings;
+    try { settings = parseSettings(req.body?.settings, config); } catch (error) { return next(error); }
     if (active >= config.maxConcurrent) {
       res.setHeader('Retry-After', '5');
       return next(new AppError(429, 'The image generator is busy. Please try again shortly.'));
@@ -44,8 +58,15 @@ export function createApp(config: Config, services: GenerationServices, clientDi
     try {
       const enhancedPrompt = await services.enhance(prompt.trim(), controller.signal);
       controller.signal.throwIfAborted();
-      const imageUrl = await services.generate(enhancedPrompt, controller.signal);
-      if (!controller.signal.aborted) res.json({ enhancedPrompt, imageUrl, error: null });
+      const generated = await services.generate(enhancedPrompt, controller.signal, settings);
+      const imageUrl = typeof generated === 'string' ? generated : generated.imageUrl;
+      if (!controller.signal.aborted) res.json({
+        enhancedPrompt, imageUrl, error: null,
+        ...(req.body?.settings || typeof generated !== 'string' ? {
+          settings, provider: config.imageProvider, promptRefined: config.promptRefinement === 'ollama',
+        } : {}),
+        ...(typeof generated !== 'string' ? { savedFile: generated.savedFile, filename: generated.filename } : {}),
+      });
     } catch (error) {
       if (!controller.signal.aborted) next(error);
     } finally {

@@ -12,7 +12,7 @@ const app = createApp(config, createServices(config), resolve(serverDirectory, '
 const server = app.listen(config.port, config.host, () => {
   console.log(`ImageGen API listening on http://${config.host}:${config.port}`);
 });
-server.requestTimeout = config.ollamaTimeoutMs + config.imageTimeoutMs + 10000;
+server.requestTimeout = config.ollamaTimeoutMs + Math.max(config.imageTimeoutMs, config.mfluxTimeoutMs) + 15000;
 server.on('error', (error: NodeJS.ErrnoException) => {
   console.error(error.code === 'EADDRINUSE' ? `Port ${config.port} is already in use.` : error.message);
   process.exitCode = 1;
