@@ -50,6 +50,11 @@ export function PromptForm() {
       <p id="prompt-help" class="muted">The subject. The light. The little details.</p>
       <label for="user-prompt" class="sr-only">Describe your image</label>
       <textarea id="user-prompt" name="userPrompt" rows="5" maxlength="2000" placeholder="An astronaut cat exploring a moonlit greenhouse…" aria-describedby="prompt-help prompt-count" use:bind=${userPromptSignal} ?disabled=${isLoadingSignal} @keydown=${keyboardSubmit}></textarea>
+      <div class="generate-footer">
+        ${Button({ type: 'submit', label: 'Generate image', icon: SparkIcon(), fullWidth: true, class: 'generate-button', loading: isLoadingSignal, loadingLabel: 'Generating…' })}
+        ${computed(() => isLoadingSignal.get() ? Button({ label: 'Cancel', icon: CloseIcon(), variant: 'secondary', class: 'cancel-button', onClick: () => activeController?.abort() }) : null)}
+        <p>${computed(() => runtimeSignal.get()?.imageProvider === 'stable-diffusion' ? 'Using the configured Stable Diffusion service.' : 'Runs on your Mac. No image-generation credits.')}</p>
+      </div>
       <div class="form-meta"><span>⌘ / Ctrl + Enter to generate</span><span id="prompt-count">${computed(() => `${userPromptSignal.get().length} / 2000`)}</span></div>
       <div class="prompt-examples" aria-label="Prompt ideas">${[
         { label: 'Lunar greenhouse', prompt: 'An astronaut cat exploring a moonlit greenhouse, condensation on the glass, silver foliage, cinematic illustration' },
@@ -58,11 +63,6 @@ export function PromptForm() {
       ].map(example => Button({ label: example.label, variant: 'secondary', size: 'small', class: 'example-button', disabled: isLoadingSignal, onClick: () => userPromptSignal.set(example.prompt) }))}</div>
     </section>
     ${GenerationSettingsComponent()}
-    <div class="generate-footer">
-      ${Button({ type: 'submit', label: 'Generate image', icon: SparkIcon(), fullWidth: true, class: 'generate-button', loading: isLoadingSignal, loadingLabel: 'Generating…' })}
-      ${computed(() => isLoadingSignal.get() ? Button({ label: 'Cancel', icon: CloseIcon(), variant: 'secondary', class: 'cancel-button', onClick: () => activeController?.abort() }) : null)}
-      <p>${computed(() => runtimeSignal.get()?.imageProvider === 'stable-diffusion' ? 'Using the configured Stable Diffusion service.' : 'Runs on your Mac. No image-generation credits.')}</p>
-    </div>
   </form>`;
 }
 
